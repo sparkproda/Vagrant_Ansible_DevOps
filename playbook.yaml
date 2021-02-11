@@ -1,0 +1,342 @@
+---
+- hosts: all
+  become: true
+  vars_files:
+    - vars.yaml
+  tasks:
+
+    - name: 'stop firewalld'
+      shell: 'systemctl stop firewalld'
+      register: result
+      failed_when:  result.changed == false
+      ignore_errors: yes
+
+
+    - name: 'Disable SWAP since kubernetes cant work with swap enabled '
+      shell: |
+        swapoff -a
+
+    - name: Install aptitude using apt.
+      apt:
+        name: aptitude
+        state: latest
+        update_cache: yes
+        force_apt_get: yes     
+
+    - name: Install prerequisites.
+      apt:
+        name: '{{ packages }}'
+        update_cache: no
+        state: latest
+      vars:
+        packages:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+
+
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu bionic stable
+        state: present
+
+    - name: Create a Docker group
+      group: 
+        name: docker 
+        state: present
+      
+    - name: Add the vagrant user to Docker group
+      user: 
+        name: vagrant
+        groups: docker 
+        append: yes        
+
+    - name: Install Docker.
+      apt:
+        name: '{{ packages }}'
+        update_cache: yes
+        state: latest
+      vars:
+        packages:
+          - docker-ce
+          - docker-compose
+
+    - name: Start docker
+      service:
+        name: docker
+        state: started
+        enabled: yes   
+  
+
+    - name: Create a network
+      docker_network:
+        name: devops_network         
+
+    ##### Nexus Install ######
+
+    - name: nexus 디렉토리 생성
+      file:
+        path: /mnt/nexus_data
+        state: directory
+        owner: vagrant
+        group: vagrant
+        mode: "u=rwx,g=rx,o=rx"              
+
+    - name: nexus container
+      docker_container:
+        name: nexus
+        image: sonatype/nexus3
+        pull: yes
+        state: started
+        user: root
+        restart: yes
+        restart_policy: always
+        networks:
+        - name: devops_network    
+        privileged: true
+        volumes:
+        - "/mnt/nexus_data:/nexus-data:rw"
+        ports:
+        - "5000:5000"
+        - "8081:8081"    
+    
+    ##### Jenkins Install #####
+
+    - name: Copy Jenkins Dockerfile from local host to remote host
+      copy:
+        src: "dockerfiles/jenkins_inc_docker/Dockerfile"
+        dest: /home/vagrant/Dockerfile
+        owner: vagrant
+        group: vagrant
+        mode: "u=rw,g=r,o=r"  
+        
+    - name: Build Jenkins images with docker-daemon
+      community.general.docker_image:
+         build:
+           path: "/home/vagrant"
+           pull: yes
+         name: "jenkins_docker"
+         tag: v1
+         source: build
+
+    - name: 젠킨스 디렉토리 생성
+      file:
+        path: /mnt/jenkins_data
+        state: directory
+        owner: vagrant
+        group: vagrant
+        mode: "u=rwx,g=rx,o=rx"    
+
+    - name: jenkins container
+      docker_container:
+        name: jenkins_docker
+        image: jenkins_docker:v1
+        state: started
+        restart_policy: always
+        networks:
+        - name: devops_network    
+        privileged: true
+        volumes:
+        - "/etc/timezone:/etc/timezone"
+        - "/etc/localtime:/etc/localtime"
+        - "/var/run/docker.sock:/var/run/docker.sock"
+        - "/mnt/jenkins_data:/var/jenkins_home"
+        ports:
+        - "9898:8080"
+        - "50000:50000"       
+
+    - name: Check password for jenkins
+      shell: cat /mnt/jenkins_data/secrets/initialAdminPassword
+      register: result
+
+    - name: Print result password
+      debug:
+        msg:
+          - "{{ result.stdout }}"
+
+    ##### DB Install #####
+
+    - name: DB 디렉토리 생성
+      file:
+        path: /mnt/mysql_data
+        state: directory
+        owner: vagrant
+        group: vagrant
+        mode: "u=rwx,g=rx,o=rx"  
+
+
+    - name: mariadb container
+      docker_container:
+        name: mariadb
+        image: mysql:5.7
+        pull: yes
+        state: started
+        restart_policy: always
+        networks:
+        - name: devops_network    
+        privileged: true
+        volumes:
+        - "/mnt/mysql_data:/var/lib/mysql:rw"
+        ports:
+        - "3306:3306"
+        env:
+          MYSQL_DATABASE: "{{ MYSQL_DATABASE }}" 
+          MYSQL_USER: "{{ MYSQL_USER }}"  
+          MYSQL_PASSWORD: "{{ MYSQL_PASSWORD }}"
+          MYSQL_ROOT_PASSWORD: "{{ MYSQL_ROOT_PASSWORD }}"
+
+    ###### Gitea Install #####
+
+    - name: Create gitea DB via command line
+      shell: |
+        docker exec -i mariadb \ 
+        sh -c 'mysql -u root -p{{ MYSQL_ROOT_PASSWORD }} \ 
+        -e \"CREATE DATABASE '{{ gitea_MYSQL_DATABASE }}'; \" ' 
+      ignore_errors: true
+
+    - name: Create gitea User via command line
+      shell: |
+        echo "GRANT ALL PRIVILEGES \ 
+        ON '{{ gitea_MYSQL_DATABASE }}'.* TO '{{ gitea_MYSQL_USER }}'@'%' \ 
+        IDENTIFIED BY '{{ gitea_MYSQL_PASSWORD }}'; FLUSH PRIVILEGES;" | \
+        docker exec -i mariadb sh -c 'mysql -u root -p{{ MYSQL_ROOT_PASSWORD }}'
+      ignore_errors: true  
+
+    - name: Gitea 디렉토리 생성
+      file:
+        path: /mnt/gitea_data
+        state: directory
+        owner: vagrant
+        group: vagrant
+        mode: "u=rwx,g=rx,o=rx"    
+
+    - name: Gitea container
+      docker_container:
+        name: Gitea_docker
+        image: gitea/gitea:1.13.2
+        state: started
+        restart_policy: always
+        networks:
+        - name: devops_network    
+        privileged: true
+        volumes:
+        - "/etc/timezone:/etc/timezone"
+        - "/etc/localtime:/etc/localtime"
+        - "/mnt/gitea_data:/data"
+        ports:
+        - "3000:3000"
+        - "2222:22"    
+        env:
+          MYSQL_DATABASE: "{{ gitea_MYSQL_DATABASE }}" 
+          MYSQL_USER: "{{ gitea_MYSQL_USER }}"  
+          MYSQL_PASSWORD: "{{ gitea_MYSQL_PASSWORD }}"
+          MYSQL_ROOT_PASSWORD: "{{ MYSQL_ROOT_PASSWORD }}"                
+
+    ##### Quay Install ######
+    - name: Create quay DB via command line
+      shell: |
+        docker exec -i mariadb \ 
+        sh -c 'mysql -u root -p{{ MYSQL_ROOT_PASSWORD }} \ 
+        -e \"CREATE DATABASE '{{ quay_MYSQL_DATABASE }}'; \" ' 
+      ignore_errors: true
+
+    - name: Create quay User via command line
+      shell: |
+        echo "GRANT ALL PRIVILEGES \ 
+        ON '{{ quay_MYSQL_DATABASE }}'.* TO '{{ quay_MYSQL_USER }}'@'%' \ 
+        IDENTIFIED BY '{{ quay_MYSQL_PASSWORD }}'; FLUSH PRIVILEGES;" | \
+        docker exec -i mariadb sh -c 'mysql -u root -p{{ MYSQL_ROOT_PASSWORD }}'
+      ignore_errors: true
+
+
+    - name: copy docker imagefile from local host to remote host
+      copy:
+        src: "{{ item }}"
+        dest: /home/vagrant/{{ item }}
+        owner: vagrant
+        group: vagrant
+        mode: "u=rw,g=r,o=r"  
+      with_items:
+        - quay-2.9.3.tar
+        - redis-forquay.tar
+
+    - name: load docker images
+      shell: docker load -i "{{ item }}"
+      with_items:
+        - quay-2.9.3.tar
+        - redis-forquay.tar
+
+    - name: Check local image list
+      shell: "docker images | cut --delimiter=' ' --fields=1"
+      register: result
+
+    - name: Print docker images
+      debug:
+        msg:
+          - "{{ result.stdout.split('\n') }}"
+
+    - name: quay redis 디렉토리 생성
+      file:
+        path: /mnt/quay_redis_data
+        state: directory
+        owner: vagrant
+        group: vagrant
+        mode: "u=rwx,g=rw,o=rw"              
+
+    - name: Redis container
+      docker_container:
+        name: Redis_docker
+        image: quay.io/quay/redis:latest
+        state: started
+        restart_policy: always
+        networks:
+        - name: devops_network    
+        privileged: true
+        volumes:
+        - "/etc/timezone:/etc/timezone"
+        - "/etc/localtime:/etc/localtime"
+        - "/mnt/quay_redis_data:/var/lib/redis/data"
+        ports:
+        - "6379:6379"           
+    
+    - name: quay 디렉토리 생성
+      file:
+        path: /mnt/quay_data/{{ item }}
+        state: directory
+        owner: vagrant
+        group: vagrant
+        mode: "u=rwx,g=rw,o=rw"  
+      with_items:     
+        - conf
+        - storage
+
+    - name: Quay container
+      docker_container:
+        name: Quay_docker
+        image: quay.io/coreos/quay:v2.9.3
+        state: started
+        restart_policy: always
+        networks:
+        - name: devops_network    
+        privileged: true
+        volumes:
+        - "/etc/timezone:/etc/timezone"
+        - "/etc/localtime:/etc/localtime"
+        - "/mnt/quay_data/conf:/conf/stack"
+        - "/mnt/quay_data/storage:/datastorage"        
+        ports:
+        - "443:443"
+        - "8989:80"                  
+
+
+
+
+
+        
+
