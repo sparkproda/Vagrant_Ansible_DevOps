@@ -233,17 +233,15 @@ DB생성 및 DB user를 생성합니다. 그리고 Gitea Docker 데몬을 실행
 
     - name: Create gitea DB via command line
       shell: |
-        docker exec -i mariadb \
-        sh -c 'mysql -u root -p{{ MYSQL_ROOT_PASSWORD }} \
-        -e \"CREATE DATABASE '{{ gitea_MYSQL_DATABASE }}'; \" '
+        docker exec -i mariadb sh -c "mysql -e \"CREATE DATABASE IF NOT EXISTS {{ gitea_MYSQL_DATABASE }}; \" \
+          -uroot -p'{{ MYSQL_ROOT_PASSWORD }}'"
       ignore_errors: true
 
     - name: Create gitea User via command line
       shell: |
-        echo "GRANT ALL PRIVILEGES \
-        ON '{{ gitea_MYSQL_DATABASE }}'.* TO '{{ gitea_MYSQL_USER }}'@'%' \
-        IDENTIFIED BY '{{ gitea_MYSQL_PASSWORD }}'; FLUSH PRIVILEGES;" | \
-        docker exec -i mariadb sh -c 'mysql -u root -p{{ MYSQL_ROOT_PASSWORD }}'
+        docker exec -i mariadb sh -c  \
+         "mysql -e \"GRANT ALL PRIVILEGES ON {{ gitea_MYSQL_DATABASE }}.* TO {{ gitea_MYSQL_USER }}@'%' IDENTIFIED BY '{{ gitea_MYSQL_PASSWORD }}'; FLUSH PRIVILEGES; \" \
+          -u root -p'{{ MYSQL_ROOT_PASSWORD }}' mysql"
       ignore_errors: true  
 
     - name: Gitea 디렉토리 생성
@@ -288,17 +286,14 @@ Mysql DB는 기존 설치된 Mysql를 사용합니다.
 ~~~
 - name: Create quay DB via command line
   shell: |
-    docker exec -i mariadb \
-    sh -c 'mysql -u root -p{{ MYSQL_ROOT_PASSWORD }} \
-    -e \"CREATE DATABASE '{{ quay_MYSQL_DATABASE }}'; \" '
+    docker exec -i mariadb sh -c "mysql -e \"CREATE DATABASE IF NOT EXISTS {{ quay_MYSQL_DATABASE }}; \" \
+      -uroot -p'{{ MYSQL_ROOT_PASSWORD }}'"
   ignore_errors: true
-
 - name: Create quay User via command line
   shell: |
-    echo "GRANT ALL PRIVILEGES \
-    ON '{{ quay_MYSQL_DATABASE }}'.* TO '{{ quay_MYSQL_USER }}'@'%' \
-    IDENTIFIED BY '{{ quay_MYSQL_PASSWORD }}'; FLUSH PRIVILEGES;" | \
-    docker exec -i mariadb sh -c 'mysql -u root -p{{ MYSQL_ROOT_PASSWORD }}'
+    docker exec -i mariadb sh -c  \
+     "mysql -e \"GRANT ALL PRIVILEGES ON {{ quay_MYSQL_DATABASE }}.* TO {{ quay_MYSQL_USER }}@'%' IDENTIFIED BY '{{ qu_MYSQL_PASSWORD }}'; FLUSH PRIVILEGES; \" \
+      -u root -p'{{ MYSQL_ROOT_PASSWORD }}' mysql"
   ignore_errors: true
 
 

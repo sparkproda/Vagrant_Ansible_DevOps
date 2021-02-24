@@ -22,11 +22,12 @@
         state: latest
         update_cache: yes
         force_apt_get: yes     
+      ignore_errors: true  
 
     - name: Install prerequisites.
       apt:
         name: '{{ packages }}'
-        update_cache: no
+        update_cache: yes
         state: latest
       vars:
         packages:
@@ -131,7 +132,7 @@
         state: directory
         owner: vagrant
         group: vagrant
-        mode: "u=rwx,g=rx,o=rx"    
+        mode: "u=rwx,g=rwx,o=rx"    
 
     - name: jenkins container
       docker_container:
@@ -154,11 +155,13 @@
     - name: Check password for jenkins
       shell: cat /mnt/jenkins_data/secrets/initialAdminPassword
       register: result
+      ignore_errors: true     
 
     - name: Print result password
       debug:
         msg:
           - "{{ result.stdout }}"
+      ignore_errors: true         
 
     ##### DB Install #####
 
@@ -168,7 +171,7 @@
         state: directory
         owner: vagrant
         group: vagrant
-        mode: "u=rwx,g=rx,o=rx"  
+        mode: "u=rwx,g=rwx,o=rx"  
 
 
     - name: mariadb container
@@ -184,29 +187,29 @@
         volumes:
         - "/mnt/mysql_data:/var/lib/mysql:rw"
         ports:
-        - "3306:3306"
+        - "3306:3306"        
         env:
           MYSQL_DATABASE: "{{ MYSQL_DATABASE }}" 
           MYSQL_USER: "{{ MYSQL_USER }}"  
           MYSQL_PASSWORD: "{{ MYSQL_PASSWORD }}"
           MYSQL_ROOT_PASSWORD: "{{ MYSQL_ROOT_PASSWORD }}"
 
+
     ###### Gitea Install #####
 
     - name: Create gitea DB via command line
       shell: |
-        docker exec -i mariadb \ 
-        sh -c 'mysql -u root -p{{ MYSQL_ROOT_PASSWORD }} \ 
-        -e \"CREATE DATABASE '{{ gitea_MYSQL_DATABASE }}'; \" ' 
+        docker exec -i mariadb sh -c "mysql -e \"CREATE DATABASE IF NOT EXISTS {{ gitea_MYSQL_DATABASE }}; \" \
+          -uroot -p'{{ MYSQL_ROOT_PASSWORD }}'"
       ignore_errors: true
 
     - name: Create gitea User via command line
       shell: |
-        echo "GRANT ALL PRIVILEGES \ 
-        ON '{{ gitea_MYSQL_DATABASE }}'.* TO '{{ gitea_MYSQL_USER }}'@'%' \ 
-        IDENTIFIED BY '{{ gitea_MYSQL_PASSWORD }}'; FLUSH PRIVILEGES;" | \
-        docker exec -i mariadb sh -c 'mysql -u root -p{{ MYSQL_ROOT_PASSWORD }}'
+        docker exec -i mariadb sh -c  \
+         "mysql -e \"GRANT ALL PRIVILEGES ON {{ gitea_MYSQL_DATABASE }}.* TO {{ gitea_MYSQL_USER }}@'%' IDENTIFIED BY '{{ gitea_MYSQL_PASSWORD }}'; FLUSH PRIVILEGES; \" \
+          -u root -p'{{ MYSQL_ROOT_PASSWORD }}' mysql"
       ignore_errors: true  
+
 
     - name: Gitea 디렉토리 생성
       file:
@@ -241,17 +244,15 @@
     ##### Quay Install ######
     - name: Create quay DB via command line
       shell: |
-        docker exec -i mariadb \ 
-        sh -c 'mysql -u root -p{{ MYSQL_ROOT_PASSWORD }} \ 
-        -e \"CREATE DATABASE '{{ quay_MYSQL_DATABASE }}'; \" ' 
+        docker exec -i mariadb sh -c "mysql -e \"CREATE DATABASE IF NOT EXISTS {{ quay_MYSQL_DATABASE }}; \" \
+          -uroot -p'{{ MYSQL_ROOT_PASSWORD }}'"
       ignore_errors: true
 
     - name: Create quay User via command line
       shell: |
-        echo "GRANT ALL PRIVILEGES \ 
-        ON '{{ quay_MYSQL_DATABASE }}'.* TO '{{ quay_MYSQL_USER }}'@'%' \ 
-        IDENTIFIED BY '{{ quay_MYSQL_PASSWORD }}'; FLUSH PRIVILEGES;" | \
-        docker exec -i mariadb sh -c 'mysql -u root -p{{ MYSQL_ROOT_PASSWORD }}'
+        docker exec -i mariadb sh -c  \
+         "mysql -e \"GRANT ALL PRIVILEGES ON {{ quay_MYSQL_DATABASE }}.* TO {{ quay_MYSQL_USER }}@'%' IDENTIFIED BY '{{ quay_MYSQL_PASSWORD }}'; FLUSH PRIVILEGES; \" \
+          -u root -p'{{ MYSQL_ROOT_PASSWORD }}' mysql"
       ignore_errors: true
 
 
@@ -287,7 +288,7 @@
         state: directory
         owner: vagrant
         group: vagrant
-        mode: "u=rwx,g=rw,o=rw"              
+        mode: "u=rw,g=rw,o=rw"              
 
     - name: Redis container
       docker_container:
@@ -334,9 +335,84 @@
         - "443:443"
         - "8989:80"                  
 
+##############################################
+## Packer and Ansible
 
+    - name: Pakcer_Terrafrom 디렉토리 생성
+      file:
+        path: /home/vagrant/packer
+        state: directory
+        owner: vagrant
+        group: vagrant
+        mode: "u=rwx,g=rw,o=rw"   
 
+    - name: Pakcer 디렉토리 생성
+      file:
+        path: /mnt/packer_data
+        state: directory
+        owner: vagrant
+        group: vagrant
+        mode: "u=rwx,g=rwx,o=rx"        
 
+    - name: Copy Packer and Terraform  Dockerfile from local host to remote host
+      copy:
+        src: "dockerfiles/packer/Dockerfile"
+        dest: /home/vagrant/packer/Dockerfile
+        owner: vagrant
+        group: vagrant
+        mode: "u=rw,g=r,o=r"  
+
+    - name: Copy Packer template from local host to remote host
+      copy:
+        src: packer/{{ item }}
+        dest: /mnt/packer_data/{{ item }}
+        owner: vagrant
+        group: vagrant
+        mode: "u=rw,g=r,o=r"       
+      with_items:
+        - template.json
+        - common.yml
+        - install-ansible.sh
 
         
+    - name: Build packer images with docker-daemon
+      community.general.docker_image:
+         build:
+           path: "/home/vagrant/packer"
+           pull: yes
+         name: "packer_spark"
+         tag: v1
+         source: build
 
+    - name: Packer container
+      docker_container:
+        name: packer_spark
+        image: packer_spark:v1
+        state: started
+        restart_policy: always
+        privileged: true
+        volumes:
+        - "/mnt/packer_data:/data"
+        - "/var/run/docker.sock:/var/run/docker.sock"
+
+    - name: Check packer version via command line
+      shell: |
+        docker exec -i packer_spark packer version
+      ignore_errors: true
+      register: result
+
+    - name: Print result packer version
+      debug:
+        msg:
+          - "{{ result }}"
+
+    - name: Check packer build via command line
+      shell: |
+        docker exec -i packer_spark packer build template.json
+      ignore_errors: true
+      register: packer_result      
+
+    - name: Print result packer build
+      debug:
+        msg:
+          - "{{ packer_result }}"      
