@@ -1,11 +1,12 @@
 pipeline {
-  agent {
-    docker {
-      image 'packer_spark:v1'
-    }
-  }
+  agent any
   stages {
     stage('Build') {
+      agent {
+        docker {
+          image 'packer_spark:v1'
+        }
+      }
       steps {
         sh 'packer_spark packer build template.json'
       }
