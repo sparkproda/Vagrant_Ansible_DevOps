@@ -9,7 +9,7 @@ pipeline {
       }
       steps {
         sh 'ls ./packer'
-        sh 'packer_spark packer build ./packer/template.json'
+        sh 'packer build ./packer/template.json'
 
         
       }
