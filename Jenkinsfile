@@ -1,7 +1,7 @@
 pipeline {
   agent any
   stages {
-    stage 'Build' {
+    stage ('Build')  {
       agent {
         docker {
           image 'packer_spark:v1'
