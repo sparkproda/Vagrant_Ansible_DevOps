@@ -13,11 +13,11 @@
     "provisioners": [
         {
             "type": "shell",
-            "script": "install-ansible.sh"
+            "script": "packer/install-ansible.sh"
         },
         {
             "type": "ansible-local",
-            "playbook_file": "common.yml"
+            "playbook_file": "packer/common.yml"
         }
     ],
     "post-processors": [

@@ -9,8 +9,8 @@ pipeline {
       }
       steps {
         sh 'ls ./packer'
-        sh 'cd packer'
-        sh 'packer build template.json'
+        sh 'ls /data'
+        sh 'packer build packer/template.json'
 
         
       }
