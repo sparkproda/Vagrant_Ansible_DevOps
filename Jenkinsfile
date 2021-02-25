@@ -5,7 +5,7 @@ pipeline {
       agent {
         docker {
           image 'packer_spark:v1'
-          args '--tmpfs /data'
+          args '-u root:root'
 
         }
       }
