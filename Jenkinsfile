@@ -5,6 +5,7 @@ pipeline {
       agent {
         docker {
           image 'packer_spark:v1'
+          args '-v /mnt/packer_data:/data'
         }
       }
       steps {
