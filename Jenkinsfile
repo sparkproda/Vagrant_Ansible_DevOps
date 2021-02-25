@@ -8,8 +8,8 @@ pipeline {
         }
       }
       steps {
-        sh 'ls'
-        sh 'packer_spark packer build template.json'
+        sh 'ls ./packer'
+        sh 'packer_spark packer build ./packer/template.json'
 
         
       }
