@@ -11,7 +11,6 @@ pipeline {
       steps {
         sh 'ls ./packer'
         sh 'ls /data'
-        sh 'mkdir /.packer.d'
         sh 'packer build packer/template.json'
 
         
