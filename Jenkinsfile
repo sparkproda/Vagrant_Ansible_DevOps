@@ -9,7 +9,6 @@ pipeline {
         }
       }
       steps {
-        sh 'ls ./packer'
         sh 'ls /data'
         sh 'packer build packer/template.json'
 
