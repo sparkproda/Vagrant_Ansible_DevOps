@@ -13,11 +13,11 @@
     "provisioners": [
         {
             "type": "shell",
-            "script": "packer/install-ansible.sh"
+            "script": "install-ansible.sh"
         },
         {
             "type": "ansible-local",
-            "playbook_file": "packer/common.yml"
+            "playbook_file": "common.yml"
         }
     ],
     "post-processors": [
@@ -25,7 +25,7 @@
           {
             "type": "docker-tag",
             "repository": "my-nginx",
-            "tag": "0.1"
+            "tag": "0.2"
           }
         ]
     ]

@@ -1,0 +1,21 @@
+pipeline {
+  agent any
+  stages {
+    stage ('Build')  {
+      agent {
+        docker {
+          image 'packer_spark:v1'
+          args '-u root:root'
+
+        }
+      }
+      steps {
+        sh 'packer build template.json'
+
+        
+      }
+    }
+
+  }
+
+}
