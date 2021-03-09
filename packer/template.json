@@ -6,8 +6,8 @@
             "commit": "true",
             "pull": "true",
             "changes": [
-                "ENTRYPOINT [\"nginx -g 'daemon off;'\"]"
-            ]
+                "ENTRYPOINT /bin/bash"
+              ]    
         }   
     ],
     "provisioners": [
@@ -25,7 +25,7 @@
           {
             "type": "docker-tag",
             "repository": "my-nginx",
-            "tag": "0.2"
+            "tag": "0.3"
           }
         ]
     ]

@@ -394,6 +394,7 @@
         volumes:
         - "/mnt/packer_data:/data"
         - "/var/run/docker.sock:/var/run/docker.sock"
+        - "/usr/share/zoneinfo/Asia/Seoul:/etc/localtime:ro"
 
     - name: Check packer version via command line
       shell: |

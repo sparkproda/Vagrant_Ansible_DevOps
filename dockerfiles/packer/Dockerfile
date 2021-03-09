@@ -27,6 +27,18 @@ RUN rc-update add docker boot
 RUN addgroup -S vagrant && adduser -S vagrant -G vagrant
 #RUN ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime
 
+RUN apk add --no-cache \
+    python3 \
+    python3-dev \
+  && pip3 install --no-cache-dir --upgrade pip \
+  && rm -rf /var/cache/* \
+  && rm -rf /root/.cache/*
+
+RUN cd /usr/bin \
+  && ln -sf python3 python \
+  && ln -sf pip3 pip
+
+
 FROM amazonlinux:2 as installer
 COPY awscli-exe-linux-x86_64.zip .
 RUN yum update -y \
