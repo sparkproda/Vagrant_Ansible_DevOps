@@ -1,7 +1,7 @@
 #!/bin/bash
 
-apt-get update
-apt-get install software-properties-common -y
-apt-add-repository ppa:ansible/ansible -y
-apt-get install ansible -y
-apt-get install bash
+sudo apt-get update
+sudo apt-get install software-properties-common -y
+sudo apt-add-repository ppa:ansible/ansible -y
+sudo apt-get install ansible -y
+sudo apt-get install bash

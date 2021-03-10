@@ -167,6 +167,7 @@ USER jenkins
     name: jenkins_docker
     image: jenkins_docker:v1
     state: started
+    user: root
     restart_policy: always
     networks:
     - name: devops_network    
@@ -376,3 +377,7 @@ Mysql DB는 기존 설치된 Mysql를 사용합니다.
     - "443:443"
     - "8989:80"                  
 ~~~
+
+## 추가사항
+
+Packer image를 생성 한 후 Packer를 통해서 custom docker image를 생성하는 부분도 추가 했습니다.

@@ -5,7 +5,7 @@ pipeline {
       agent {
         docker {
           image 'packer_spark:v1'
-          args '-u root:root'
+          args '--dns 8.8.8.8'
 
         }
       }
