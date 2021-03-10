@@ -382,4 +382,4 @@ Mysql DB는 기존 설치된 Mysql를 사용합니다.
 
 Packer image를 생성 한 후 Packer를 통해서 custom docker image를 생성하는 부분도 추가 했습니다.
 
-![Packer](./img/Automated Docker builds for Jenkins agents with Packer.png)
+![Packer](./img/Automated_Docker_builds_for_Jenkins_agents_with_Packer.png)
